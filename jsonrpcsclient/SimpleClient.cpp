@@ -44,6 +44,11 @@ awaitable<std::string> SimpleClient::Read() {
 		boost::asio::experimental::as_tuple(boost::asio::use_awaitable));
 	if (!ec)
 	{
+		// TODO: For example here you could have a function that checks 
+		// if the response has an id 
+		//		-> handle the response to the request
+		// if the response has no id
+		//		-> probably a signal
 		std::cout << "Read " << n << " bytes\n";
 		auto res = std::string{ response.begin(), response.end() };
 		std::cout << res;
