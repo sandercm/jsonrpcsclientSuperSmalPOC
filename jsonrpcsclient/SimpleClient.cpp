@@ -1,5 +1,10 @@
 #include "SimpleClient.h"
 #include <iostream>
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+
+using namespace rapidjson;
 
 SimpleClient::SimpleClient(tcp::socket& socket, const std::string& host, const std::string& port)
 	: m_socket(socket)
@@ -37,6 +42,47 @@ awaitable<void> SimpleClient::_Connect()
 	}
 }
 
+std::vector<std::string> splitString(const std::string& input) {
+	std::vector<std::string> result;
+
+	size_t startPos = 0;
+	size_t foundPos = input.find("}{", startPos);
+
+	while (foundPos != std::string::npos) {
+		result.push_back(input.substr(startPos, foundPos - startPos + 1));
+		startPos = foundPos + 2;
+		foundPos = input.find("}{", startPos);
+	}
+
+	// Add the last part of the string (after the last "}{")
+	result.push_back(input.substr(startPos));
+
+	return result;
+}
+
+void handleMessage(std::string msg)
+{
+	auto messages = splitString(msg);
+
+	for (const auto& json : messages)
+	{
+		std::cout << "json is" << json << std::endl;
+		Document d;
+		d.Parse(json.c_str());
+
+		if (d.IsObject() && d.HasMember("id"))
+		{
+			std::cout << d["id"].GetInt() << std::endl;
+			std::cout << json << std::endl;
+		}
+		else
+		{
+			std::cout << "Message recieved with no id" << std::endl;
+			std::cout << json << std::endl;
+		}
+	}
+}
+
 awaitable<std::string> SimpleClient::Read() {	
 	std::cout << "reading data" << std::endl;
 	std::vector<char> response(1024);
@@ -51,7 +97,7 @@ awaitable<std::string> SimpleClient::Read() {
 		//		-> probably a signal
 		std::cout << "Read " << n << " bytes\n";
 		auto res = std::string{ response.begin(), response.end() };
-		std::cout << res;
+		handleMessage(res);
 		co_return res;
 	}
 	else
