@@ -23,7 +23,7 @@ private:
 public:
 	SimpleClient(tcp::socket& socket, const std::string& host, const std::string& port);
 	awaitable<void> Connect();
-	awaitable<boost::json::value> Read();
+	awaitable<void> Read();
 	awaitable<void> Write(const std::vector<char>& data);
 private:
 	awaitable<void> _Connect();

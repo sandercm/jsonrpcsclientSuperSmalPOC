@@ -22,6 +22,12 @@ int main() {
         std::string test = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}";
         std::vector<char> buffer{ test.begin(),test.end() };
         co_await client.Write(buffer);
+        std::string test2 = "";
+        std::vector<char> buffer2{ test.begin(),test.end() };
+        co_await client.Write(buffer2);
+        std::string test3 = "{\"test\": \"this would have broken btb {{{{}{}}}}{{}{}}\"";
+        std::vector<char> buffer3{ test.begin(),test.end() };
+        co_await client.Write(buffer3);
     }, detached);
 
     // This spawns the corountine that handles reading

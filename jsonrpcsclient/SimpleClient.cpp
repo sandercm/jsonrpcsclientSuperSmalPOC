@@ -40,12 +40,16 @@ awaitable<void> SimpleClient::_Connect()
 
 void handleMessage(boost::json::value msg)
 {
+	// this function represent where we could hook back into btb/write a simple client
+	// if a connection drops and you saved your subscribed objects inside this class 
+	// it would remember it's current state, as reconnects are automatically handled
+	// by the co_spawn.
 	if (msg.is_object())
 	{
-		auto obj = msg.get_object();
+		auto & obj = msg.get_object();
 		if (obj.contains("id"))
 		{
-			std::cout << "response contains id" << obj.at("id") << std::endl;
+			std::cout << "response contains id " << obj.at("id") << std::endl;
 		}
 		else
 		{
@@ -58,33 +62,40 @@ void handleMessage(boost::json::value msg)
 	}
 }
 
-awaitable<boost::json::value> SimpleClient::Read() {	
+awaitable<void> SimpleClient::Read() {	
 	std::cout << "reading data" << std::endl;
 	std::vector<char> response(9);
 	auto [ec, n] = co_await m_socket.async_read_some(boost::asio::buffer(response),
 		boost::asio::experimental::as_tuple(boost::asio::use_awaitable));
 	if (!ec)
 	{
-		std::cout << "Read " << n << " bytes\n";
-		auto res = std::string{ response.begin(), response.end() }; // this part can probably be optimised
-		std::cout << res << std::endl;
+		try {
+			std::cout << "Read " << n << " bytes\n";
+			auto res = std::string{ response.begin(), response.end() }; // this part can probably be optimised
+			std::cout << res << std::endl;
 
-		// Add to parser buffer
-		auto amountParsed = m_parser.write_some(res);
-		std::cout << "parsed " << amountParsed << " chars" << std::endl;
-		std::cout << "there are " << res.size() - amountParsed << " bytes left in the buffer" << std::endl;
-		// if parser isn't done we can just not return anything to suspend the execution of read()
-		// it will be called again in the while loop inside co_spawn
-		if (m_parser.done())
+			// Add to parser buffer
+			auto amountParsed = m_parser.write_some(res);
+			std::cout << "parsed " << amountParsed << " chars" << std::endl;
+			std::cout << "there are " << res.size() - amountParsed << " bytes left in the buffer" << std::endl;
+			// if parser isn't done we can just not return anything to suspend the execution of read()
+			// it will be called again in the while loop inside co_spawn
+			if (m_parser.done())
+			{
+				std::cout << "m_parser is done" << std::endl;
+				auto jv = m_parser.release(); // This will move the buffer to jv
+				std::cout << jv << std::endl;
+				m_parser.reset(); // Prepare the parser for a new object
+				auto subs = res.substr(amountParsed);
+				std::cout << "trying to continue with this sub string " << subs << std::endl;
+				m_parser.write_some(subs); // Fill the buffer with the left over data in the socket
+				handleMessage(jv); // return the parsed json upstream, creating an async, event driven jsonrpc pipeline.
+			}
+		}
+		catch (std::exception& e)
 		{
-			std::cout << "m_parser is done" << std::endl;
-			auto jv = m_parser.release();
-			std::cout << jv << std::endl;
+			std::cout << "error parsing json " << e.what() << std::endl;
 			m_parser.reset();
-			auto subs = res.substr(amountParsed);
-			std::cout << "trying to continue with this sub string " << subs << std::endl;
-			m_parser.write_some(subs);
-			co_return jv;
 		}
 	}
 	else
