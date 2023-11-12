@@ -41,7 +41,9 @@ awaitable<void> SimpleClient::_Connect()
 		std::cout << "Connected!" << std::endl;
 	}
 }
-
+// this won't work for long messages so you'd have to extend it to handle multiple
+// messages that contain a chunk of the json but as an example this shows
+// how the general flow of this network layer could work
 std::vector<std::string> splitString(const std::string& input) {
 	std::vector<std::string> result;
 
@@ -74,11 +76,13 @@ void handleMessage(std::string msg)
 		{
 			std::cout << d["id"].GetInt() << std::endl;
 			std::cout << json << std::endl;
+			// check if we are waiting for a message with this id ...
 		}
 		else
 		{
 			std::cout << "Message recieved with no id" << std::endl;
 			std::cout << json << std::endl;
+			// handle signal ...
 		}
 	}
 }

@@ -34,7 +34,6 @@ int main() {
     // this will do a non blocking read on the socket
     co_spawn(ioContext, [&client]() mutable -> awaitable<void> {
         co_await client.Connect();
-        std::vector<char> buffer(1024);
         while (true) {
             co_await client.Read();
         }
