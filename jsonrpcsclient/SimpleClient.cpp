@@ -1,16 +1,12 @@
+#pragma once
 #include "SimpleClient.h"
 #include <iostream>
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-
-using namespace rapidjson;
 
 SimpleClient::SimpleClient(tcp::socket& socket, const std::string& host, const std::string& port)
 	: m_socket(socket)
 	, m_host(host)
 	, m_port(port)
-	, m_shouldReconnect(true)
+	, m_parser()
 {
 }
 
@@ -41,55 +37,30 @@ awaitable<void> SimpleClient::_Connect()
 		std::cout << "Connected!" << std::endl;
 	}
 }
-// this won't work for long messages so you'd have to extend it to handle multiple
-// messages that contain a chunk of the json but as an example this shows
-// how the general flow of this network layer could work
-std::vector<std::string> splitString(const std::string& input) {
-	std::vector<std::string> result;
 
-	size_t startPos = 0;
-	size_t foundPos = input.find("}{", startPos);
-
-	while (foundPos != std::string::npos) {
-		result.push_back(input.substr(startPos, foundPos - startPos + 1));
-		startPos = foundPos + 2;
-		foundPos = input.find("}{", startPos);
-	}
-
-	// Add the last part of the string (after the last "}{")
-	result.push_back(input.substr(startPos));
-
-	return result;
-}
-
-void handleMessage(std::string msg)
+void handleMessage(boost::json::value msg)
 {
-	auto messages = splitString(msg);
-
-	for (const auto& json : messages)
+	if (msg.is_object())
 	{
-		std::cout << "json is" << json << std::endl;
-		Document d;
-		d.Parse(json.c_str());
-
-		if (d.IsObject() && d.HasMember("id"))
+		auto obj = msg.get_object();
+		if (obj.contains("id"))
 		{
-			std::cout << d["id"].GetInt() << std::endl;
-			std::cout << json << std::endl;
-			// check if we are waiting for a message with this id ...
+			std::cout << "response contains id" << obj.at("id") << std::endl;
 		}
 		else
 		{
-			std::cout << "Message recieved with no id" << std::endl;
-			std::cout << json << std::endl;
-			// handle signal ...
+			std::cout << "object has no id, so probably signal" << std::endl;
 		}
+	}
+	else
+	{
+		std::cout << "recieved unknown json object " << msg << std::endl;
 	}
 }
 
-awaitable<std::string> SimpleClient::Read() {	
+awaitable<boost::json::value> SimpleClient::Read() {	
 	std::cout << "reading data" << std::endl;
-	std::vector<char> response(1024);
+	std::vector<char> response(8);
 	auto [ec, n] = co_await m_socket.async_read_some(boost::asio::buffer(response),
 		boost::asio::experimental::as_tuple(boost::asio::use_awaitable));
 	if (!ec)
@@ -101,8 +72,22 @@ awaitable<std::string> SimpleClient::Read() {
 		//		-> probably a signal
 		std::cout << "Read " << n << " bytes\n";
 		auto res = std::string{ response.begin(), response.end() };
-		handleMessage(res);
-		co_return res;
+		std::cout << res << std::endl;
+
+		// Add to parser buffer
+		auto amountParsed = m_parser.write_some(res);
+		std::cout << "parsed " << amountParsed << " chars" << std::endl;
+		std::cout << "there are " << res.size() - amountParsed << " bytes left in the buffer" << std::endl;
+		// if parser isn't done we can just not return anything to suspend the execution of read()
+		// it will be called again in the while loop inside co_spawn
+		if (m_parser.done())
+		{
+			std::cout << "m_parser is done" << std::endl;
+			auto jv = m_parser.release();
+			std::cout << jv << std::endl;
+			m_parser.reset();
+			co_return jv;
+		}
 	}
 	else
 	{
