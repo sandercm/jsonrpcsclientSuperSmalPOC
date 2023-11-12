@@ -19,15 +19,9 @@ int main() {
     // this will do a non blocking write on the socket
     co_spawn(ioContext, [&client]() mutable -> awaitable<void> {
         co_await client.Connect();
-        std::string test = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}";
+        std::string test = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sum\",\"params\":[1,2,3]}";
         std::vector<char> buffer{ test.begin(),test.end() };
-        long long i = 0;
-        while (i != 100000)
-        {
-            co_await client.Write(buffer);
-            i = 0;
-            i++;
-        }
+        co_await client.Write(buffer);
     }, detached);
 
     // This spawns the corountine that handles reading

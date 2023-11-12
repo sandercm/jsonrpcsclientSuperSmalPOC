@@ -60,18 +60,13 @@ void handleMessage(boost::json::value msg)
 
 awaitable<boost::json::value> SimpleClient::Read() {	
 	std::cout << "reading data" << std::endl;
-	std::vector<char> response(8);
+	std::vector<char> response(9);
 	auto [ec, n] = co_await m_socket.async_read_some(boost::asio::buffer(response),
 		boost::asio::experimental::as_tuple(boost::asio::use_awaitable));
 	if (!ec)
 	{
-		// TODO: For example here you could have a function that checks 
-		// if the response has an id 
-		//		-> handle the response to the request
-		// if the response has no id
-		//		-> probably a signal
 		std::cout << "Read " << n << " bytes\n";
-		auto res = std::string{ response.begin(), response.end() };
+		auto res = std::string{ response.begin(), response.end() }; // this part can probably be optimised
 		std::cout << res << std::endl;
 
 		// Add to parser buffer
@@ -86,6 +81,9 @@ awaitable<boost::json::value> SimpleClient::Read() {
 			auto jv = m_parser.release();
 			std::cout << jv << std::endl;
 			m_parser.reset();
+			auto subs = res.substr(amountParsed);
+			std::cout << "trying to continue with this sub string " << subs << std::endl;
+			m_parser.write_some(subs);
 			co_return jv;
 		}
 	}
@@ -96,7 +94,7 @@ awaitable<boost::json::value> SimpleClient::Read() {
 		co_await _Connect();
 	}
 }
-
+// Will probably be replace with a co_spawn call for each method call
 awaitable<void> SimpleClient::Write(const std::vector<char>& data) {
 	std::cout << "writing data" << std::endl;
 	auto [ec, n] = co_await async_write(m_socket, buffer(data), boost::asio::experimental::as_tuple(boost::asio::use_awaitable));
